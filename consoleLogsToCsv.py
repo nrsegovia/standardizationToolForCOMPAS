@@ -1,6 +1,7 @@
 # This file needs the COMPAS output to be saved locally, i.e. $COMPAS/src/COMPAS --myParams &> storeConsoleLogs.txt,
 # and then use it as first argument. By default it will create a new csv file named console.csv in the same directory
-# as this file.
+# as this file. Note that you have to specify --evolve-unbound-systems FALSE for unbound systems to show up in the logs
+# as well as terminate the evolution at that point.
 
 from os import path as pth
 import sys
@@ -15,8 +16,8 @@ endDict = {'Allowed time exceeded' : "Time",
            'Double White Dwarf' : "DWD",
            'Evolution stopped' : "DCO",
            'Massless Remnant formed' : "MasslessRemnant",
-           'Stars merged' : "Merger"}
-# Need: Unbound
+           'Stars merged' : "Merger",
+           'Unbound Binary' : "Unbound"}
 
 idx = 0
 with open(pth.abspath(sys.argv[1])) as file:
