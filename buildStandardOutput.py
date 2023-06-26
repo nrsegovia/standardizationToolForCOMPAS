@@ -8,8 +8,8 @@ endConditionDict = {'DCO' : 2,
                     'DWD' : 9,
                     'MasslessRemnant' : 4, # how to distinguish between one and two massless remnants? this one could be 5, too
                     'Merger' : 4,
-                    'Time' : 1}
-# Will have to add UNBOUND as well
+                    'Time' : 1,
+                    'Unbound' : 3}
 
 compasToLucaRuggeroSNDIct = {1 : 2,
     2 : 3,
