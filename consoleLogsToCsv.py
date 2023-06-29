@@ -17,7 +17,7 @@ endDict = {'Allowed time exceeded' : "Time",
            'Evolution stopped' : "DCO",
            'Massless Remnant formed' : "MasslessRemnant",
            'Stars merged' : "Merger",
-           'Unbound Binary' : "Unbound"}
+           'Unbound binary' : "Unbound"}
 
 idx = 0
 with open(pth.abspath(sys.argv[1])) as file:

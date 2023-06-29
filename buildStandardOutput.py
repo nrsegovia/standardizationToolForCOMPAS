@@ -187,7 +187,7 @@ DataSum.close()
 
 # Physical properties needed for L0 standardized output. Problems: Temperature is the same pre and post RLOF
 dictAll = {"Sys" : [sysID,sysTime, 8,sysSMA,sysEC,sysST1,sysM1,sysR1,sysT1,sysMHe1,sysST2,sysM2,sysR2,sysT2,sysMHe2],
-           "CEE" : [ceID,ceTime, 5,ceSMA,ceEC,ceST1,ceM1,ceR1,ceT1,ceMHe1,ceST2,ceM2,ceR2,ceT2,ceMHe2],
+           "CEE" : [ceID,ceTime, 51,ceSMA,ceEC,ceST1,ceM1,ceR1,ceT1,ceMHe1,ceST2,ceM2,ceR2,ceT2,ceMHe2],
            "RLOF" : [rlID,[rlTimePre, rlTimePost], [3, 4],[rlSMAPre,rlSMAPost],[rlECPre, rlECPost],[rlST1Pre, rlST1Post],[rlM1Pre, rlM1Post],[rlR1Pre, rlR1Post],[rlT1, rlT1],[rlMHe1, rlMHe1],[rlST2Pre, rlST2Post],[rlM2Pre, rlM2Post],[rlR2Pre, rlR2Post],[rlT2, rlT2],[rlMHe2, rlMHe2]],
            "SNe" : [snID,snTime, 2,snSMA,snEC,snST1,snM1,snR1,snT1,snMHe1,snST2,snM2,snR2,snT2,snMHe2],
            "Switch" : [swID,swTime, 1,swSMA,swEC,swST1,swM1,swR1,swT1,swMHe1,swST2,swM2,swR2,swT2,swMHe2]}
@@ -204,7 +204,7 @@ output = open(pth.join(local, "standardOutputV0.csv"), "w")
 # Needed: Header with physical constants, COMPAS version and stuff required by the standard output.
 output.write("ID,UID,time,event,semiMajor,eccentricity,type1,mass1,radius1,Teff1,massHecore1,type2,mass2,radius2,Teff2,massHecore2\n")
 
-for x in range(10000): #len(sysID)):
+for x in range(100): #len(sysID)):
     current = sysID[x]
     tempLine = f"{x},{current},"
     times = []
@@ -220,24 +220,25 @@ for x in range(10000): #len(sysID)):
                 for r in range(2):
                     for arg in args:
                         thisTime = crt[1][r][arg][0]
-                        others = ",".join([str(crt[x][r][arg][0]) for x in range(3,15)])
+                        others = ",".join(["{0:.4E}".format(crt[x][r][arg][0]) if isinstance(crt[x][r][arg][0], float) else str(crt[x][r][arg][0]) for x in range(3,15)])
                         event = crt[2][r]
                         eventPriority.append(event)
                         ending = decodeStatus(event, helperDict[log][r][arg][0])
-                        thisLine = tempLine+f"{thisTime},{ending},{others}\n"
+                        thisLine = tempLine+f"{thisTime:.4E},{ending},{others}\n"
                         allTemps.append(thisLine)
                         times.append(thisTime)
             else:
                 for arg in args:
                     thisTime = crt[1][arg][0]
-                    others = ",".join([str(crt[x][arg][0]) for x in range(3,15)])
+                    others = ",".join(["{0:.4E}".format(crt[x][arg][0]) if isinstance(crt[x][arg][0], float) else str(crt[x][arg][0]) for x in range(3,15)])
                     extras = [compasToLucaRuggeroSNDIct[snWhichType[snWho[arg][0]][arg][0]]] if log == "SNe" else []
                     event = crt[2]
                     eventPriority.append(event)
                     ending = decodeStatus(event, helperDict[log][arg][0], extras)
-                    thisLine = tempLine+f"{thisTime},{ending},{others}\n"
+                    thisLine = tempLine+f"{thisTime:.4E},{ending},{others}\n"
                     allTemps.append(thisLine)
                     times.append(thisTime)
     sortedByTime = np.lexsort((eventPriority, times))
     for s in sortedByTime:
         output.write(allTemps[s])
+output.close()
