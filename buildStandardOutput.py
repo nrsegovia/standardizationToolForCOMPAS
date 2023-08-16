@@ -3,6 +3,7 @@ import h5py as h5
 from os import path as pth
 import pandas as pd
 import sys
+import os
 
 endConditionDict = {'DCO' : 2,
                     'DWD' : 9,
@@ -59,18 +60,26 @@ def whosRLOF(primary, companion):
     companion = companion.astype(int) * 2
     return primary + companion
 
-local = pth.split(pth.abspath(__file__))[0]
-# NEEDS the console logs processed by consoleLogsToCsv.py in the same directory as this file.
-consoleLog = pd.read_csv(pth.join(local, "console.csv")) # Index column should refelct the indexes from sysPars. Systems with errors are included as Index == -99
-maskedErrors = consoleLog["Index"] != -99
-sysTerm = np.fromiter((endConditionDict[x] for x in consoleLog["Termination"].values[maskedErrors]), int)
+local = pth.abspath(sys.argv[1])
+# first argument is COMPAS' output directory
 
+toOpen = [x for x in os.listdir(local) if x.endswith(".h5")]
+if len(toOpen) != 1:
+    print("Either no h5 file or more than one. Check the directory,")
+    exit()
 
-# first argument is location of the .h5 file (COMPAS Output).
+configs = {}
+etc = []
+with open(pth.join(local, "Run_Details"), "r") as details:
+    for line in details.readlines():
+        crt = line.strip() # Current line
+        if " = " in crt:
+            stuff = crt.split(" = ")
+            configs[stuff[0]] = stuff[1]
+        else:
+            etc.append(crt)
 
-toLoad = pth.abspath(sys.argv[1])
-
-DataSum = h5.File(toLoad, 'r')
+DataSum = h5.File(pth.join(local, toOpen[0]), 'r')
 
 # Stuff from Sys params
 sysPars = DataSum["BSE_System_Parameters"]
@@ -88,6 +97,7 @@ sysM2 = sysPars["Mass(2)"][()]
 sysR2 = sysPars["Radius(2)"][()]
 sysT2 = sysPars["Teff(2)"][()]
 sysMHe2 = sysPars["Mass_He_Core(2)"][()]
+sysTerm = np.fromiter((endConditionDict[x] for x in consoleLog["Termination"].values[maskedErrors]), int)
 
 # CEE
 cee = DataSum["BSE_Common_Envelopes"]
@@ -199,12 +209,9 @@ helperDict = {"Sys" : sysTerm,
            "SNe" : snWho,
            "Switch" : swWho}
 
-# Output is saved in the same directory as this file, under the name "standardOutputV0.csv"
-output = open(pth.join(local, "standardOutputV0.csv"), "w")
-# Needed: Header with physical constants, COMPAS version and stuff required by the standard output.
-output.write("ID,UID,time,event,semiMajor,eccentricity,type1,mass1,radius1,Teff1,massHecore1,type2,mass2,radius2,Teff2,massHecore2\n")
-
-for x in range(100): #len(sysID)):
+allLines = []
+totSys = len(sysID)
+for x in range(100): #totSys):
     current = sysID[x]
     tempLine = f"{x},{current},"
     times = []
@@ -240,5 +247,28 @@ for x in range(100): #len(sysID)):
                     times.append(thisTime)
     sortedByTime = np.lexsort((eventPriority, times))
     for s in sortedByTime:
-        output.write(allTemps[s])
+        allLines.append(allTemps[s])
+
+
+
+
+# Needed: Header with physical constants, COMPAS version and stuff required by the standard output.
+
+cofVer = 0.2 # Common output format
+level = "L0" # Cof Level as shown in the PDF document
+ext = "" # Extension name, if used. Otherwise empty string
+bps = "COMPAS" # Code name
+ver = etc[1].split()[1][1:]
+contact = "n.rsegovia@adfa.edu.au" # Contact email
+nsys = totSys
+nlines = len(allLines) + 3 # Should this be at the end. somehow? I will suppose that it counts the header as well.
+metal = configs["metallicity"].split(", ")[0]
+
+header = ["cofVer,cofLevel,cofExtension,bpsName,bpsVer,contact,NSYS,NLINES,Z\n",
+          f"{cofVer},{level},{ext},{bps},{ver},{contact},{nsys},{nlines},{metal}\n",
+          "ID,UID,time,event,semiMajor,eccentricity,type1,mass1,radius1,Teff1,massHecore1,type2,mass2,radius2,Teff2,massHecore2\n"]
+
+# Output is saved in the COMPAS directory, under the name "standardOutputV0.csv"
+output = open(pth.join(local, "standardOutputV0.csv"), "w")
+output.writelines(header+allLines)
 output.close()
