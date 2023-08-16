@@ -5,12 +5,12 @@ import pandas as pd
 import sys
 import os
 
-endConditionDict = {'DCO' : 2,
-                    'DWD' : 9,
-                    'MasslessRemnant' : 4, # how to distinguish between one and two massless remnants? this one could be 5, too
-                    'Merger' : 4,
-                    'Time' : 1,
-                    'Unbound' : 3}
+endConditionDict = {11 : 2,
+                    12 : 9,
+                    13 : 4, # how to distinguish between one and two massless remnants? this one could be 5, too
+                    9 : 4,
+                    3 : 1,
+                    14 : 3}
 
 compasToLucaRuggeroSNDIct = {1 : 2,
     2 : 3,
@@ -97,7 +97,7 @@ sysM2 = sysPars["Mass(2)"][()]
 sysR2 = sysPars["Radius(2)"][()]
 sysT2 = sysPars["Teff(2)"][()]
 sysMHe2 = sysPars["Mass_He_Core(2)"][()]
-sysTerm = np.fromiter((endConditionDict[x] for x in consoleLog["Termination"].values[maskedErrors]), int)
+sysTerm = np.fromiter((endConditionDict[x] for x in sysPars["Evolution_Status"][()]), int)
 
 # CEE
 cee = DataSum["BSE_Common_Envelopes"]
@@ -211,7 +211,7 @@ helperDict = {"Sys" : sysTerm,
 
 allLines = []
 totSys = len(sysID)
-for x in range(100): #totSys):
+for x in range(totSys):
     current = sysID[x]
     tempLine = f"{x},{current},"
     times = []
