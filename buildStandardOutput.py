@@ -9,6 +9,7 @@ endConditionDict = {11 : 2,
                     12 : 9,
                     13 : 4, # how to distinguish between one and two massless remnants? this one could be 5, too
                     9 : 4,
+                    8 : 9, # COMPAS says that "stars are touching"
                     3 : 1,
                     14 : 3}
 
