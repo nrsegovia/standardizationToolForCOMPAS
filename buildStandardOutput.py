@@ -173,7 +173,8 @@ snWho = sne["Supernova_State"][()]
 snType1 = sne["SN_Type(1)"][()]
 snType2 = sne["SN_Type(2)"][()]
 snWhichType = {1 : snType1,
-               2 : snType2}
+               2 : snType2,
+               3 : snType1}#[snType1, snType2]} # Use only one for now, have to check what happens in these cases and how to proceed.
 
 # Switch
 switchLog = DataSum["BSE_Switch_Log"]
@@ -239,7 +240,16 @@ for x in range(totSys):
                 for arg in args:
                     thisTime = crt[1][arg][0]
                     others = ",".join(["{0:.4E}".format(crt[x][arg][0]) if isinstance(crt[x][arg][0], float) else str(crt[x][arg][0]) for x in range(3,15)])
-                    extras = [compasToLucaRuggeroSNDIct[snWhichType[snWho[arg][0]][arg][0]]] if log == "SNe" else []
+                    if log == "SNe":
+                        whoIsGoing = snWho[arg][0]
+                        extras = [compasToLucaRuggeroSNDIct[snWhichType[whoIsGoing][arg][0]]]
+                        # The following lines do nothing for now, but we should use them in case we have to do something different when both stars go SN.
+                        # if whoIsGoing != 3:
+                        #     extras = [compasToLucaRuggeroSNDIct[snWhichType[whoIsGoing][arg][0]]]
+                        # else:
+                        #     pass 
+                    else:
+                        extras = []              
                     event = crt[2]
                     eventPriority.append(event)
                     ending = decodeStatus(event, helperDict[log][arg][0], extras)
