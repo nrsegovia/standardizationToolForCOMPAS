@@ -154,6 +154,7 @@ rlWho = whosRLOF(rlIs1, rlIs2)
 
 # SNe
 sne = DataSum["BSE_Supernovae"]
+sne = sne[sne["Supernova_State"][()] > 0] # All should be SN, but somehow some non-SN events show up... investigate. For now, remove them.
 snID = sne["ID"][()]
 snTime = sne["Time"][()]
 snSMA = sne["SemiMajorAxis"][()]
