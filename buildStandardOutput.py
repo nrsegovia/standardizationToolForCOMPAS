@@ -156,6 +156,56 @@ def getUCBEventForSupernova(Data):
 #getUCBEventForSupernova(Data)
 
 
+def getUCBEventForMT(Data):
+
+    MT = Data["BSE_RLOF"]
+    # Need to distinguish:
+    # 1. Start of RLOF
+    # 2. End of RLOF
+    # 3. CEE events
+    # 4. Mergers
+    # 5. Contact phase (do we do this?)
+    
+    # Direct output
+    uid = MT["SEED"][()]
+    time = MT["Time"][()]
+    semiMajorAxis = MT["SemiMajorAxis"][()]
+    eccentricity = MT["Eccentricity"][()]
+    mass1 = MT["Mass(1)"][()]
+    mass2 = MT["Mass(2)"][()]
+    radius1 = MT["Radius(1)"][()]
+    radius2 = MT["Radius(2)"][()]
+    teff1 = MT["Teff(1)"][()]
+    teff2 = MT["Teff(2)"][()]
+    massHeCore1 = MT["Mass_He_Core(1)"][()]
+    massHeCore2 = MT["Mass_He_Core(2)"][()]
+    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
+    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
+    
+    # Processed output
+    # Start of RLOF
+    isRlof1 = MT["RLOF(1)>MT"][()]
+    isRlof2 = MT["RLOF(2)>MT"][()]
+    wasRlof1 = MT["RLOF(1)<MT"][()]
+    wasRlof2 = MT["RLOF(2)<MT"][()]
+    maskStartOfRlof1 = isRlof1 & ~wasRlof1
+    maskStartOfRlof2 = isRlof2 & ~wasRlof2
+
+    # TODO Scrap seeds if RLOF for both in the same timestep - is there any way to work with these??
+    scrapSeeds = np.zeros_like(uid).astype(bool) # should not have to remove any seeds from MTs
+
+
+    for ii in range(2):
+        whichStar = ii+1 # either star 1 or 2
+        mask = [ maskStartOfRlof1, maskStartOfRlof2 ][ii]
+        event = 3*10 + whichStar
+    
+    
+        # TODO: don't do a return here, just append to a previous vector or array
+        return create_UCB_events( uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
+                                  stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
+                                  stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
+                                  scrapSeeds=scrapSeeds)
 
 #endConditionDict = {11 : 2,
 #                    12 : 9,
