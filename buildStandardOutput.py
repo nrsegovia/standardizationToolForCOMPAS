@@ -1,26 +1,87 @@
+# %matplotlib inline
+
+from IPython.core.display import display, HTML
+display(HTML("<style>.container { width:100% !important; }</style>"))
+
 import os, sys
 import numpy as np
 import h5py as h5
 import pandas as pd
 
+# +
+# ## COMPAS of course has many different output file types, 
+# ## and does not print a chronological set of events.
+# ## To retrieve this for the UCB standardized outputs, 
+# ## it is easiest to process each entry in 'BSE_RLOF', 
+# ## 'BSE_Supernovae', and 'BSE_Switch_Log' separately, 
+# ## and then combine and reorder these afterwards.  Notably, 
+# ## ordering needs to be done on seeds first, and time second.
+#
+# ## Star IDs should be assigned at the end, COMPAS IDs should not be used
+# ## This is because COMPAS IDs are not guarunteed to be unique (if multiple hdf5 runs are combied together), and there may be some missing if, e.g., the sampled initial conditions of a system were invalid. 
+#
+# ## Events require:
+# ## ID UID time event semiMajor eccentricity type1 mass1 radius1 Teff1 massHecore1 type2 mass2 radius2 Teff2 massHeCore2
+# -
+
+#
 
 testing=True
 if testing:
     Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
+    MT = Data['BSE_RLOF']
+    SN = Data['BSE_Supernovae']
+
+def main():
+    
+    Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
+
+    ucb_events_obj = UCB_Events()
+
+    getUCBEventForSupernova(Data, ucb_events_obj)
+    getUCBEventForMassTransfer(Data, ucb_events_obj)
+    #getUCBEventForStellarTypeChanges(Data, ucb_events_obj) # TODO
+    #getUCBEventForEndCondition(Data, ucb_events_obj) # TODO
+
+
+class UCB_Events(object):
+    
+    # Should hold an array which is all of the UCB events so far
+    # and a method to add more
+
+    def __init__(self):
+        self.all_UCB_events = np.array([])
+
+    def add_events( self, uid=None, time=None, event=None, semiMajor=None, eccentricity=None, 
+                        stellarType2=None, mass2=None, radius2=None, teff2=None, massHeCore2=None,
+                        stellarType1=None, mass1=None, radius1=None, teff1=None, massHeCore1=None, 
+                        scrapSeeds=None):
+    
+        ordered_columns = [ uid, time, event, semiMajor, eccentricity, 
+                            stellarType1, mass1, radius1, teff1, massHeCore1, 
+                            stellarType2, mass2, radius2, teff2, massHeCore2, 
+                            scrapSeeds ] 
+    
+        # Want to enter data using name keywords, but all of them are required
+        if np.any([ ii is None for ii in ordered_columns ]):
+            raise Exception("Can't skip any of the required input values")
+        self.all_UCB_events = np.append(self.all_UCB_events, np.vstack(ordered_columns))
+
+        # TODO: check this...
     
 
-# #######################################
-# ##
-# ## COMPAS to UCB stellar type converter
-# ##
-# #######################################
+    def get_events(self):
+        # TODO: write the code to reorder the cells
+        # TODO: remove all the scrapSeeds systems
+        return self.all_UCB_events
 
+
+# +
 def verifyAndConvertCompasDataToUcbUsingDict(compasData, conversionDict):
     """
-    General function to verify and convert compas data arrays to their 
-    equivalent values in UCB format, using dictionaries defined below
+    General convenience function to verify and convert compas data arrays to their 
+    equivalent values in UCB format, using the dictionaries defined variously below
     """
-    # Verify input is valid
     try: 
         valid_types = np.array(list(conversionDict.keys()))
         assert np.all(np.in1d(compasData, valid_types))
@@ -29,7 +90,20 @@ def verifyAndConvertCompasDataToUcbUsingDict(compasData, conversionDict):
     # Quickly process entire input vector through converter dict
     return np.vectorize(conversionDict.get)(compasData)
 
+#run test
+#SP = Data['BSE_System_Parameters']
+#st1 = SP['Stellar_Type(1)'][()]
+#print(verifyAndConvertCompasDataToUcbUsingDict(st1, compasStellarTypeToUCBdict))
+# -
 
+
+
+# ## Convert COMPAS output to UCB events 
+
+#
+
+# +
+# Stellar type conversion dictionary
 
 compasStellarTypeToUCBdict = {
     # COMPAS : UCB
@@ -51,58 +125,15 @@ compasStellarTypeToUCBdict = {
     15: -1,
     16: 9,  # CHE star - doesn't exist in UCB notation
 }
+# -
 
-# run test
-#SP = Data['BSE_System_Parameters']
-#st1 = SP['Stellar_Type(1)'][()]
-#print(verifyAndConvertCompasDataToUcbUsingDict(st1, compasStellarTypeToUCBdict))
-
-
-# #######################################
-# #
-# # COMPAS to UCB events
-# #
-# #######################################
-
-# ## COMPAS of course has many different output file types, 
-# ## and does not print a chronological set of events.
-# ## To retrieve this for the UCB standardized outputs, 
-# ## it is easiest to process each entry in 'BSE_RLOF', 
-# ## 'BSE_Supernovae', and 'BSE_Switch_Log' separately, 
-# ## and then combine and reorder these afterwards.  Notably, 
-# ## ordering needs to be done on seeds first, and time second.
-#
-# ## Star IDs should be assigned at the end, COMPAS IDs should not be used
-# ## This is because COMPAS IDs are not guarunteed to be unique (if multiple hdf5 runs are combied together), and there may be some missing if, e.g., the sampled initial conditions of a system were invalid. 
 #
 
-#Events require:
-#ID UID time event semiMajor eccentricity type1 mass1 radius1 Teff1 massHecore1 type2 mass2 radius2 Teff2 massHeCore2
 
-def create_UCB_events( uid=None, time=None, event=None, semiMajor=None, eccentricity=None, 
-                       stellarType1=None, mass1=None, radius1=None, teff1=None, massHeCore1=None, 
-                       stellarType2=None, mass2=None, radius2=None, teff2=None, massHeCore2=None,
-                       scrapSeeds=None):
+# +
+## Supernova output processing
 
-    ordered_columns = [ uid, time, event, semiMajor, eccentricity, 
-                        stellarType1, mass1, radius1, teff1, massHeCore1, 
-                        stellarType2, mass2, radius2, teff2, massHeCore2, scrapSeeds ] 
-
-    # Want to enter data using name keywords, but all of them are required
-    if np.any([ ii is None for ii in ordered_columns ]):
-        raise Exception("Can't skip any of the required input values")
-
-    return np.vstack(ordered_columns)
-    
-# TODO: write the code to append the different outputs
-# Needs to be np.concatenate([arr1, arr2, arr3, ...], axis=1)
-
-# TODO: write the code to reorder the cells, and also to remove all the scrapSeeds systems
-
-
-
-
-
+# Supernova conversion dictionary
 compasSupernovaToUCBdict = {
     1:   2, # CCSN
     2:   3, # ECSN
@@ -115,7 +146,10 @@ compasSupernovaToUCBdict = {
 }
 UCB_SN_TYPE_DIRECT_COLLAPSE = 6 # Need to separately treat failed SNe (i.e direct collapse)
 
-def getUCBEventForSupernova(Data):
+
+# -
+
+def getUCBEventForSupernova(Data, ucb_events_obj):
 
     SN = Data["BSE_Supernovae"]
     
@@ -147,16 +181,16 @@ def getUCBEventForSupernova(Data):
     
     scrapSeeds = whichStar == 3 # need to remove these seeds at the end
     
-    return create_UCB_events( uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
-                              stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
-                              stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
-                              scrapSeeds=scrapSeeds)
-    
-#if testing:
-#getUCBEventForSupernova(Data)
+    ucb_events_obj.add_events( uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
+                               stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
+                               stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
+                               scrapSeeds=scrapSeeds)
 
 
-def getUCBEventForMT(Data):
+# +
+## BSE_RLOF output processing
+
+def getUCBEventForMassTransfer(Data, ucb_events_obj):
 
     MT = Data["BSE_RLOF"]
     # Need to distinguish:
@@ -168,45 +202,209 @@ def getUCBEventForMT(Data):
     
     # Direct output
     uid = MT["SEED"][()]
-    time = MT["Time"][()]
-    semiMajorAxis = MT["SemiMajorAxis"][()]
-    eccentricity = MT["Eccentricity"][()]
-    mass1 = MT["Mass(1)"][()]
-    mass2 = MT["Mass(2)"][()]
-    radius1 = MT["Radius(1)"][()]
-    radius2 = MT["Radius(2)"][()]
+    time = MT["Time>MT"][()]
+    semiMajorAxis = MT["SemiMajorAxis>MT"][()]
+    eccentricity = MT["Eccentricity>MT"][()]
+    mass1 = MT["Mass(1)>MT"][()]
+    mass2 = MT["Mass(2)>MT"][()]
+    radius1 = MT["Radius(1)>MT"][()]
+    radius2 = MT["Radius(2)>MT"][()]
     teff1 = MT["Teff(1)"][()]
     teff2 = MT["Teff(2)"][()]
     massHeCore1 = MT["Mass_He_Core(1)"][()]
     massHeCore2 = MT["Mass_He_Core(2)"][()]
-    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
-    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
+    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(1)>MT"][()], compasStellarTypeToUCBdict)
+    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(2)>MT"][()], compasStellarTypeToUCBdict)
     
-    # Processed output
-    # Start of RLOF
-    isRlof1 = MT["RLOF(1)>MT"][()]
-    isRlof2 = MT["RLOF(2)>MT"][()]
-    wasRlof1 = MT["RLOF(1)<MT"][()]
-    wasRlof2 = MT["RLOF(2)<MT"][()]
-    maskStartOfRlof1 = isRlof1 & ~wasRlof1
-    maskStartOfRlof2 = isRlof2 & ~wasRlof2
+    # Indirect output
+    isRlof1 = MT["RLOF(1)>MT"][()] == 1
+    isRlof2 = MT["RLOF(2)>MT"][()] == 1
+    wasRlof1 = MT["RLOF(1)<MT"][()] == 1
+    wasRlof2 = MT["RLOF(2)<MT"][()] == 1
+    isCEE = MT["CEE>MT"][()] == 1
+    isMerger = MT["Merger"][()] == 1
+    scrapSeeds = np.zeros_like(uid).astype(bool) # TODO Scrap seeds if start of RLOF for both in the same timestep - is there any way to work with these??
 
-    # TODO Scrap seeds if RLOF for both in the same timestep - is there any way to work with these??
-    scrapSeeds = np.zeros_like(uid).astype(bool) # should not have to remove any seeds from MTs
-
+    # Every mask in allmasks corresponds to an event in allevents
+    allmasks = []
+    allevents = []
+    
+    # Could make an events array of Nones, and then fill as they come up
+    # The advantage of this is that for timesteps that qualify as 2 different events, you overwrite the wrong one...
+    # Maybe I should just include the flags explicitly, that's probably more careful
+    # So instead of doing a bunch of final MT timesteps and overwriting with any CEEs, I just include ~CEE in the condition.
+    
+    # 1. Start of RLOF.
+    maskStartOfRlof1 = isRlof1 & ~wasRlof1 & ~isCEE
+    maskStartOfRlof2 = isRlof2 & ~wasRlof2 & ~isCEE
 
     for ii in range(2):
         whichStar = ii+1 # either star 1 or 2
-        mask = [ maskStartOfRlof1, maskStartOfRlof2 ][ii]
-        event = 3*10 + whichStar
-    
-    
-        # TODO: don't do a return here, just append to a previous vector or array
-        return create_UCB_events( uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
-                                  stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
-                                  stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
-                                  scrapSeeds=scrapSeeds)
+        allmasks.append([ maskStartOfRlof1, maskStartOfRlof2 ][ii])
+        allevents.append( 3*10 + whichStar )
 
+    # 2. End of RLOF
+    maskFirstMtInParade1 = isRlof1 & ~wasRlof1
+    maskFirstMtInParade2 = isRlof2 & ~wasRlof2
+    for ii in range(2):
+        whichStar = ii+1 # either star 1 or 2
+        maskFirstMtInParade = [ maskFirstMtInParade1, maskFirstMtInParade2][ii]
+        idxLastMtInParade = maskFirstMtInParade.nonzero()[0] - 1
+        maskLastMtInParade = np.zeros_like(uid).astype(bool)
+        maskLastMtInParade[idxLastMtInParade] = True
+        allmasks.append(maskLastMtInParade & ~isCEE)
+        allevents.append(4*10 + whichStar)
+
+    # 3. CEE events - Process each CEE donor separately, plus double CEE for both
+    maskAnyCEE = isCEE & ~isMerger
+    whichStar = 1
+    maskCEE1 = isRlof1 & ~isRlof2 & maskAnyCEE
+    allmasks.append(maskCEE1)
+    allevents.append(510 + whichStar)
+    whichStar = 2
+    maskCEE2 = isRlof2 & ~isRlof1 & maskAnyCEE
+    allmasks.append(maskCEE2)
+    allevents.append(510 + whichStar)
+    whichStar = 3
+    maskCEE3 = isRlof2 & isRlof1 & maskAnyCEE
+    allmasks.append(maskCEE3)
+    allevents.append(510 + whichStar)
+
+    # 4. Mergers
+    allmasks.append(isMerger)
+    allevents.append(52)
+    
+    # 5. Contact phase (do we do this?)
+    # TBD
+    
+    
+    for mask, event in zip(allmasks, allevents):
+
+        ucb_events_obj.add_events( uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
+                                   stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
+                                   stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
+                                   scrapSeeds=scrapSeeds[mask])
+
+
+# +
+## BSE_RLOF output processing
+
+def getUCBEventForStellarTypeChanges(Data, ucb_events_obj):
+
+    MT = Data["BSE_Switch_Log"]
+    # Need to distinguish:
+    # 1. Start of RLOF
+    # 2. End of RLOF
+    # 3. CEE events
+    # 4. Mergers
+    # 5. Contact phase (do we do this?)
+    
+    # Direct output
+    uid = MT["SEED"][()]
+    time = MT["Time>MT"][()]
+    semiMajorAxis = MT["SemiMajorAxis>MT"][()]
+    eccentricity = MT["Eccentricity>MT"][()]
+    mass1 = MT["Mass(1)>MT"][()]
+    mass2 = MT["Mass(2)>MT"][()]
+    radius1 = MT["Radius(1)>MT"][()]
+    radius2 = MT["Radius(2)>MT"][()]
+    teff1 = MT["Teff(1)"][()]
+    teff2 = MT["Teff(2)"][()]
+    massHeCore1 = MT["Mass_He_Core(1)"][()]
+    massHeCore2 = MT["Mass_He_Core(2)"][()]
+    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(1)>MT"][()], compasStellarTypeToUCBdict)
+    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(2)>MT"][()], compasStellarTypeToUCBdict)
+    
+    # Indirect output
+    isRlof1 = MT["RLOF(1)>MT"][()] == 1
+    isRlof2 = MT["RLOF(2)>MT"][()] == 1
+    wasRlof1 = MT["RLOF(1)<MT"][()] == 1
+    wasRlof2 = MT["RLOF(2)<MT"][()] == 1
+    isCEE = MT["CEE>MT"][()] == 1
+    isMerger = MT["Merger"][()] == 1
+    scrapSeeds = np.zeros_like(uid).astype(bool) # TODO Scrap seeds if start of RLOF for both in the same timestep - is there any way to work with these??
+
+    # Every mask in allmasks corresponds to an event in allevents
+    allmasks = []
+    allevents = []
+    
+    # Could make an events array of Nones, and then fill as they come up
+    # The advantage of this is that for timesteps that qualify as 2 different events, you overwrite the wrong one...
+    # Maybe I should just include the flags explicitly, that's probably more careful
+    # So instead of doing a bunch of final MT timesteps and overwriting with any CEEs, I just include ~CEE in the condition.
+    
+    # 1. Start of RLOF.
+    maskStartOfRlof1 = isRlof1 & ~wasRlof1 & ~isCEE
+    maskStartOfRlof2 = isRlof2 & ~wasRlof2 & ~isCEE
+
+    for ii in range(2):
+        whichStar = ii+1 # either star 1 or 2
+        allmasks.append([ maskStartOfRlof1, maskStartOfRlof2 ][ii])
+        allevents.append( 3*10 + whichStar )
+
+    # 2. End of RLOF
+    maskFirstMtInParade1 = isRlof1 & ~wasRlof1
+    maskFirstMtInParade2 = isRlof2 & ~wasRlof2
+    for ii in range(2):
+        whichStar = ii+1 # either star 1 or 2
+        maskFirstMtInParade = [ maskFirstMtInParade1, maskFirstMtInParade2][ii]
+        idxLastMtInParade = maskFirstMtInParade.nonzero()[0] - 1
+        maskLastMtInParade = np.zeros_like(uid).astype(bool)
+        maskLastMtInParade[idxLastMtInParade] = True
+        allmasks.append(maskLastMtInParade & ~isCEE)
+        allevents.append(4*10 + whichStar)
+
+    # 3. CEE events - Process each CEE donor separately, plus double CEE for both
+    maskAnyCEE = isCEE & ~isMerger
+    whichStar = 1
+    maskCEE1 = isRlof1 & ~isRlof2 & maskAnyCEE
+    allmasks.append(maskCEE1)
+    allevents.append(510 + whichStar)
+    whichStar = 2
+    maskCEE2 = isRlof2 & ~isRlof1 & maskAnyCEE
+    allmasks.append(maskCEE2)
+    allevents.append(510 + whichStar)
+    whichStar = 3
+    maskCEE3 = isRlof2 & isRlof1 & maskAnyCEE
+    allmasks.append(maskCEE3)
+    allevents.append(510 + whichStar)
+
+    # 4. Mergers
+    allmasks.append(isMerger)
+    allevents.append(52)
+    
+    # 5. Contact phase (do we do this?)
+    # TBD
+    # I think a clear example where COMPAS has contact binaries is CHE, where stars are allowed to fill their Roche lobe as long as they are not filling the second lagrangian point (which for equal mass binaries is effectively the same as touching).
+    # In the case on non-CHE binaries, I think contact systems result in merger (as you say/suggest), but probably good to double check.
+    # We do flag if masses were equilibrated at birth (we also flag if they were equilibrated at any time during the exvolution of CHE stars)
+
+    
+    
+    for mask, event in zip(allmasks, allevents):
+
+        ucb_events_obj.add_events( uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
+                                   stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
+                                   stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
+                                   scrapSeeds=scrapSeeds[mask])
+# -
+
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+
+
+
+# +
 #endConditionDict = {11 : 2,
 #                    12 : 9,
 #                    13 : 4, # how to distinguish between one and two massless remnants? this one could be 5, too
@@ -414,7 +612,7 @@ def getUCBEventForMT(Data):
 #
 #cofVer = 0.2 # Common output format
 #level = "L0" # Cof Level as shown in the PDF document
-#ext = "" # Extension name, if used. Otherwise empty string
+#ext = "" # Extensiona name, if used. Otherwise empty string
 #bps = "COMPAS" # Code name
 #ver = etc[1].split()[1][1:]
 #contact = "n.rsegovia@adfa.edu.au" # Contact email
