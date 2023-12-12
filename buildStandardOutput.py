@@ -26,23 +26,28 @@ import pandas as pd
 
 #
 
-testing=True
-if testing:
-    Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
-    MT = Data['BSE_RLOF']
-    SN = Data['BSE_Supernovae']
+# +
+# TODO: check the whole thing
+# -
 
+
+
+
+
+# +
 def main():
+    filepath = './COMPAS_Output/COMPAS_Output.h5'
+    load_COMPAS_data(filepath)
     
-    Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
-
+def load_COMPAS_data(filepath):
+    Data = h5.File(filepath, 'r')
     ucb_events_obj = UCB_Events()
-
+    
     getUCBEventForSupernova(Data, ucb_events_obj)
     getUCBEventForMassTransfer(Data, ucb_events_obj)
     #getUCBEventForStellarTypeChanges(Data, ucb_events_obj) # TODO
     #getUCBEventForEndCondition(Data, ucb_events_obj) # TODO
-
+    return ucb_events_obj.getEvents()
 
 class UCB_Events(object):
     
@@ -52,7 +57,7 @@ class UCB_Events(object):
     def __init__(self):
         self.all_UCB_events = np.array([])
 
-    def add_events( self, uid=None, time=None, event=None, semiMajor=None, eccentricity=None, 
+    def addEvents(self, uid=None, time=None, event=None, semiMajor=None, eccentricity=None, 
                         stellarType2=None, mass2=None, radius2=None, teff2=None, massHeCore2=None,
                         stellarType1=None, mass1=None, radius1=None, teff1=None, massHeCore1=None, 
                         scrapSeeds=None):
@@ -65,15 +70,33 @@ class UCB_Events(object):
         # Want to enter data using name keywords, but all of them are required
         if np.any([ ii is None for ii in ordered_columns ]):
             raise Exception("Can't skip any of the required input values")
-        self.all_UCB_events = np.append(self.all_UCB_events, np.vstack(ordered_columns))
-
-        # TODO: check this...
+        vstacked_columns = np.stack(ordered_columns)
+        self.all_UCB_events = np.concatenate((self.all_UCB_events, vstacked_columns), axis=1) if self.all_UCB_events.size else vstacked_columns
     
 
-    def get_events(self):
-        # TODO: write the code to reorder the cells
-        # TODO: remove all the scrapSeeds systems
-        return self.all_UCB_events
+    def getEvents(self):
+        # Clean up events - remove bad seeds
+        allSeeds = self.all_UCB_events[0]
+        badSeedMask = self.all_UCB_events[-1] == 1
+        badSeeds = allSeeds[badSeedMask]
+        goodSeedMask = ~np.in1d(allSeeds, badSeeds)
+        cleaned_UCB_events = self.all_UCB_events.T[goodSeedMask].T
+
+        # Reorder the cells by uid (seed) first, then time second
+        uid = cleaned_UCB_events[0, :]
+        time = cleaned_UCB_events[1, :]
+        reordered_UCB_events = cleaned_UCB_events[:, np.lexsort((time, uid))] # sorts by last column first
+        # TODO: what about events that double up? Say MT and SN in the same timestep?
+
+        # Add id column
+        uid_arr = reordered_UCB_events[0, :]
+        uniq_uid = np.unique(uid_arr) #sorted!
+        uniq_id = np.arange(len(uniq_uid)) + 1
+        dict_uid_id = dict(zip(uniq_uid, uniq_id))
+        id_arr = np.vectorize(dict_uid_id.__getitem__)(uid_arr)
+        expanded_UCB_events = np.concatenate((id_arr.reshape((1,-1)), reordered_UCB_events), axis=0)
+        
+        return expanded_UCB_events
 
 
 # +
@@ -181,7 +204,7 @@ def getUCBEventForSupernova(Data, ucb_events_obj):
     
     scrapSeeds = whichStar == 3 # need to remove these seeds at the end
     
-    ucb_events_obj.add_events( uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
+    ucb_events_obj.addEvents(  uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
                                stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
                                stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
                                scrapSeeds=scrapSeeds)
@@ -278,9 +301,10 @@ def getUCBEventForMassTransfer(Data, ucb_events_obj):
     # TBD
     
     
+    # Use masks to add all the events back into the array
     for mask, event in zip(allmasks, allevents):
 
-        ucb_events_obj.add_events( uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
+        ucb_events_obj.addEvents(  uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
                                    stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
                                    stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
                                    scrapSeeds=scrapSeeds[mask])
@@ -383,7 +407,7 @@ def getUCBEventForStellarTypeChanges(Data, ucb_events_obj):
     
     for mask, event in zip(allmasks, allevents):
 
-        ucb_events_obj.add_events( uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
+        ucb_events_obj.addEvents(  uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
                                    stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
                                    stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
                                    scrapSeeds=scrapSeeds[mask])
@@ -393,6 +417,31 @@ def getUCBEventForStellarTypeChanges(Data, ucb_events_obj):
 
 if __name__ == "__main__":
     main()
+    # for testing
+    Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
+    print(Data.keys())
+    MT = Data['BSE_RLOF']
+    SN = Data['BSE_Supernovae']
+    SP = Data['BSE_System_Parameters']
+    SL = Data['BSE_Switch_Log']
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
