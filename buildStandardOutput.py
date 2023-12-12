@@ -28,78 +28,104 @@ import pandas as pd
 
 # +
 # TODO: check the whole thing
+# TODO: what about events that double up? Say MT and SN in the same timestep?
 # -
-
-
 
 
 
 # +
 def main():
     filepath = './COMPAS_Output/COMPAS_Output.h5'
-    load_COMPAS_data(filepath)
+    return load_COMPAS_data(filepath)
     
 def load_COMPAS_data(filepath):
-    Data = h5.File(filepath, 'r')
-    ucb_events_obj = UCB_Events()
-    
-    getUCBEventForSupernova(Data, ucb_events_obj)
-    getUCBEventForMassTransfer(Data, ucb_events_obj)
-    #getUCBEventForStellarTypeChanges(Data, ucb_events_obj) # TODO
-    #getUCBEventForEndCondition(Data, ucb_events_obj) # TODO
+    ucb_events_obj = UCB_Events(filepath)
+    getUCBEventForSupernova(ucb_events_obj)
+    getUCBEventForMassTransfer(ucb_events_obj)
+    #getUCBEventForStellarTypeChanges(ucb_events_obj) # TODO
+    #getUCBEventForEndCondition(ucb_events_obj) # TODO
     return ucb_events_obj.getEvents()
 
 class UCB_Events(object):
-    
-    # Should hold an array which is all of the UCB events so far
-    # and a method to add more
-
-    def __init__(self):
-        self.all_UCB_events = np.array([])
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.Data = h5.File(filepath, 'r')
+        self.all_UCB_events = None
+        self.initialiaze_header()
+        
+    def initialiaze_header(self):
+        self.header = {
+            "cofVer" : 1.0, 
+            "cofLevel": "L0",
+            "cofExtension": "None", 
+            "bpsName": "COMPAS",
+            "bpsVer": self.Data['Run_Details']['COMPAS-Version'][()][0].decode('UTF-8'),
+            "contact": "reinhold.willcox@gmail.com", 
+            "NSYS": 0, 
+            "NLINES": 0,
+            #"Z": metallicity
+        }
+                       
+    def update_header(self):
+        df = self.all_UCB_events
+        ids = df.loc[:,'ID']
+        self.header.update({
+            "NSYS": len(np.unique(ids)),
+            "NLINES": len(ids)
+        })
 
     def addEvents(self, uid=None, time=None, event=None, semiMajor=None, eccentricity=None, 
                         stellarType2=None, mass2=None, radius2=None, teff2=None, massHeCore2=None,
                         stellarType1=None, mass1=None, radius1=None, teff1=None, massHeCore1=None, 
                         scrapSeeds=None):
-    
-        ordered_columns = [ uid, time, event, semiMajor, eccentricity, 
-                            stellarType1, mass1, radius1, teff1, massHeCore1, 
-                            stellarType2, mass2, radius2, teff2, massHeCore2, 
-                            scrapSeeds ] 
+        columns   = [  "UID", "time", "event", "semiMajor", "eccentricity", 
+                       "stellarType1", "mass1", "radius1", "teff1", "massHeCore1", 
+                       "stellarType2", "mass2", "radius2", "teff2", "massHeCore2", 
+                       "scrapSeeds" ] 
+        data_list = [   uid,   time,   event,   semiMajor,   eccentricity, 
+                        stellarType1,   mass1,   radius1,   teff1,   massHeCore1, 
+                        stellarType2,   mass2,   radius2,   teff2,   massHeCore2, 
+                        scrapSeeds   ] 
     
         # Want to enter data using name keywords, but all of them are required
-        if np.any([ ii is None for ii in ordered_columns ]):
-            raise Exception("Can't skip any of the required input values")
-        vstacked_columns = np.stack(ordered_columns)
-        self.all_UCB_events = np.concatenate((self.all_UCB_events, vstacked_columns), axis=1) if self.all_UCB_events.size else vstacked_columns
-    
+        if np.any([ ii is None for ii in data_list ]):
+            raise Exception("Can't skip any of the required input values. Currently missing {}".format(columns[ii]))
+        new_events = pd.DataFrame(np.vstack(data_list).T, columns=columns)    
+        if self.all_UCB_events is None:
+            self.all_UCB_events = new_events
+        else:
+            self.all_UCB_events = pd.concat([self.all_UCB_events, new_events])
 
     def getEvents(self):
-        # Clean up events - remove bad seeds
-        allSeeds = self.all_UCB_events[0]
-        badSeedMask = self.all_UCB_events[-1] == 1
-        badSeeds = allSeeds[badSeedMask]
-        goodSeedMask = ~np.in1d(allSeeds, badSeeds)
-        cleaned_UCB_events = self.all_UCB_events.T[goodSeedMask].T
-
-        # Reorder the cells by uid (seed) first, then time second
-        uid = cleaned_UCB_events[0, :]
-        time = cleaned_UCB_events[1, :]
-        reordered_UCB_events = cleaned_UCB_events[:, np.lexsort((time, uid))] # sorts by last column first
-        # TODO: what about events that double up? Say MT and SN in the same timestep?
-
-        # Add id column
-        uid_arr = reordered_UCB_events[0, :]
-        uniq_uid = np.unique(uid_arr) #sorted!
-        uniq_id = np.arange(len(uniq_uid)) + 1
-        dict_uid_id = dict(zip(uniq_uid, uniq_id))
-        id_arr = np.vectorize(dict_uid_id.__getitem__)(uid_arr)
-        expanded_UCB_events = np.concatenate((id_arr.reshape((1,-1)), reordered_UCB_events), axis=0)
+        df = self.all_UCB_events                                        # Convert to df for convenience
         
-        return expanded_UCB_events
+        # Clean up events - remove bad seeds
+        allSeeds = df.loc[:,"UID"]                                      # Identify all seeds (or UIDs)
+        scrapSeedMask = df.loc[:,"scrapSeeds"] == 1                     # Identify and create mask from the scrapSeeds column
+        badSeedMask = np.in1d(allSeeds, allSeeds[scrapSeedMask])        # Create mask for all seeds to be scrapped, including rows with scrappable seeds that were not masked for it
+        df = df[~badSeedMask]                                           # Return df without scrapped seeds
+        df = df.drop(columns='scrapSeeds')                              # Remove scrap seeds column
+
+        # Reorder the cells, add ID column
+        df = df.sort_values(["UID", 'time'])                            # Reorder by uid (seed) first, then time second        
+        uid_arr = df.loc[:,"UID"]                                       # Get list of UIDs
+        uniq_uid = np.unique(uid_arr)                                   # Get the unique sorted list of UIDs
+        uniq_id = np.arange(len(uniq_uid)) + 1                          # Start IDs counter at 1
+        dict_uid_id = dict(zip(uniq_uid, uniq_id))                      # Map the UIDs to the IDs
+        id_arr = np.vectorize(dict_uid_id.__getitem__)(uid_arr)         # Apply the map to the list of UIDs (with repeats)
+        df.insert(0, "ID", id_arr)                                      # Insert the full IDs list at the front of the df
+        
+        self.all_UCB_events = df                                        # Convert back from df
+        self.update_header()                                            # Update the header with new information
+        return self.all_UCB_events
 
 
-# +
+
+# -
+
+main()
+
+
 def verifyAndConvertCompasDataToUcbUsingDict(compasData, conversionDict):
     """
     General convenience function to verify and convert compas data arrays to their 
@@ -110,14 +136,8 @@ def verifyAndConvertCompasDataToUcbUsingDict(compasData, conversionDict):
         assert np.all(np.in1d(compasData, valid_types))
     except:
         raise Exception('Invalid input array')
-    # Quickly process entire input vector through converter dict
-    return np.vectorize(conversionDict.get)(compasData)
+    return np.vectorize(conversionDict.get)(compasData)  # Quickly process entire input vector through converter dict
 
-#run test
-#SP = Data['BSE_System_Parameters']
-#st1 = SP['Stellar_Type(1)'][()]
-#print(verifyAndConvertCompasDataToUcbUsingDict(st1, compasStellarTypeToUCBdict))
-# -
 
 
 
@@ -172,8 +192,9 @@ UCB_SN_TYPE_DIRECT_COLLAPSE = 6 # Need to separately treat failed SNe (i.e direc
 
 # -
 
-def getUCBEventForSupernova(Data, ucb_events_obj):
+def getUCBEventForSupernova(ucb_events_obj):
 
+    Data = ucb_events_obj.Data
     SN = Data["BSE_Supernovae"]
     
     # Direct output
@@ -213,8 +234,9 @@ def getUCBEventForSupernova(Data, ucb_events_obj):
 # +
 ## BSE_RLOF output processing
 
-def getUCBEventForMassTransfer(Data, ucb_events_obj):
+def getUCBEventForMassTransfer(ucb_events_obj):
 
+    Data = ucb_events_obj.Data
     MT = Data["BSE_RLOF"]
     # Need to distinguish:
     # 1. Start of RLOF
@@ -313,97 +335,12 @@ def getUCBEventForMassTransfer(Data, ucb_events_obj):
 # +
 ## BSE_RLOF output processing
 
-def getUCBEventForStellarTypeChanges(Data, ucb_events_obj):
-
-    MT = Data["BSE_Switch_Log"]
-    # Need to distinguish:
-    # 1. Start of RLOF
-    # 2. End of RLOF
-    # 3. CEE events
-    # 4. Mergers
-    # 5. Contact phase (do we do this?)
+def getUCBEventForStellarTypeChanges(ucb_events_obj):
     
-    # Direct output
-    uid = MT["SEED"][()]
-    time = MT["Time>MT"][()]
-    semiMajorAxis = MT["SemiMajorAxis>MT"][()]
-    eccentricity = MT["Eccentricity>MT"][()]
-    mass1 = MT["Mass(1)>MT"][()]
-    mass2 = MT["Mass(2)>MT"][()]
-    radius1 = MT["Radius(1)>MT"][()]
-    radius2 = MT["Radius(2)>MT"][()]
-    teff1 = MT["Teff(1)"][()]
-    teff2 = MT["Teff(2)"][()]
-    massHeCore1 = MT["Mass_He_Core(1)"][()]
-    massHeCore2 = MT["Mass_He_Core(2)"][()]
-    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(1)>MT"][()], compasStellarTypeToUCBdict)
-    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(MT["Stellar_Type(2)>MT"][()], compasStellarTypeToUCBdict)
+    Data = ucb_events_obj.Data
+    SL = Data["BSE_Switch_Log"]
     
-    # Indirect output
-    isRlof1 = MT["RLOF(1)>MT"][()] == 1
-    isRlof2 = MT["RLOF(2)>MT"][()] == 1
-    wasRlof1 = MT["RLOF(1)<MT"][()] == 1
-    wasRlof2 = MT["RLOF(2)<MT"][()] == 1
-    isCEE = MT["CEE>MT"][()] == 1
-    isMerger = MT["Merger"][()] == 1
-    scrapSeeds = np.zeros_like(uid).astype(bool) # TODO Scrap seeds if start of RLOF for both in the same timestep - is there any way to work with these??
-
-    # Every mask in allmasks corresponds to an event in allevents
-    allmasks = []
-    allevents = []
-    
-    # Could make an events array of Nones, and then fill as they come up
-    # The advantage of this is that for timesteps that qualify as 2 different events, you overwrite the wrong one...
-    # Maybe I should just include the flags explicitly, that's probably more careful
-    # So instead of doing a bunch of final MT timesteps and overwriting with any CEEs, I just include ~CEE in the condition.
-    
-    # 1. Start of RLOF.
-    maskStartOfRlof1 = isRlof1 & ~wasRlof1 & ~isCEE
-    maskStartOfRlof2 = isRlof2 & ~wasRlof2 & ~isCEE
-
-    for ii in range(2):
-        whichStar = ii+1 # either star 1 or 2
-        allmasks.append([ maskStartOfRlof1, maskStartOfRlof2 ][ii])
-        allevents.append( 3*10 + whichStar )
-
-    # 2. End of RLOF
-    maskFirstMtInParade1 = isRlof1 & ~wasRlof1
-    maskFirstMtInParade2 = isRlof2 & ~wasRlof2
-    for ii in range(2):
-        whichStar = ii+1 # either star 1 or 2
-        maskFirstMtInParade = [ maskFirstMtInParade1, maskFirstMtInParade2][ii]
-        idxLastMtInParade = maskFirstMtInParade.nonzero()[0] - 1
-        maskLastMtInParade = np.zeros_like(uid).astype(bool)
-        maskLastMtInParade[idxLastMtInParade] = True
-        allmasks.append(maskLastMtInParade & ~isCEE)
-        allevents.append(4*10 + whichStar)
-
-    # 3. CEE events - Process each CEE donor separately, plus double CEE for both
-    maskAnyCEE = isCEE & ~isMerger
-    whichStar = 1
-    maskCEE1 = isRlof1 & ~isRlof2 & maskAnyCEE
-    allmasks.append(maskCEE1)
-    allevents.append(510 + whichStar)
-    whichStar = 2
-    maskCEE2 = isRlof2 & ~isRlof1 & maskAnyCEE
-    allmasks.append(maskCEE2)
-    allevents.append(510 + whichStar)
-    whichStar = 3
-    maskCEE3 = isRlof2 & isRlof1 & maskAnyCEE
-    allmasks.append(maskCEE3)
-    allevents.append(510 + whichStar)
-
-    # 4. Mergers
-    allmasks.append(isMerger)
-    allevents.append(52)
-    
-    # 5. Contact phase (do we do this?)
-    # TBD
-    # I think a clear example where COMPAS has contact binaries is CHE, where stars are allowed to fill their Roche lobe as long as they are not filling the second lagrangian point (which for equal mass binaries is effectively the same as touching).
-    # In the case on non-CHE binaries, I think contact systems result in merger (as you say/suggest), but probably good to double check.
-    # We do flag if masses were equilibrated at birth (we also flag if they were equilibrated at any time during the exvolution of CHE stars)
-
-    
+    # TODO
     
     for mask, event in zip(allmasks, allevents):
 
@@ -411,12 +348,28 @@ def getUCBEventForStellarTypeChanges(Data, ucb_events_obj):
                                    stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
                                    stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
                                    scrapSeeds=scrapSeeds[mask])
+# +
+## BSE_RLOF output processing
+
+def getUCBEventForEndCondition(ucb_events_obj):
+    
+    Data = ucb_events_obj.Data
+    SP = Data["BSE_System_Parameters"]
+    
+    # TODO
+    
+    for mask, event in zip(allmasks, allevents):
+
+        ucb_events_obj.addEvents(  uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
+                                   stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
+                                   stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
+                                   scrapSeeds=scrapSeeds[mask])
+
+
 # -
 
 
-
 if __name__ == "__main__":
-    main()
     # for testing
     Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
     print(Data.keys())
@@ -424,8 +377,6 @@ if __name__ == "__main__":
     SN = Data['BSE_Supernovae']
     SP = Data['BSE_System_Parameters']
     SL = Data['BSE_Switch_Log']
-
-
 
 
 
