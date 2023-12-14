@@ -43,7 +43,7 @@ def load_COMPAS_data(filepath):
     getUCBEventForStellarTypeChanges(ucb_events_obj)
     getUCBEventForSupernova(ucb_events_obj)
     getUCBEventForMassTransfer(ucb_events_obj)
-    #getUCBEventForEndCondition(ucb_events_obj) # TODO
+    getUCBEventForEndCondition(ucb_events_obj)
     return ucb_events_obj.getEvents()
 
 class UCB_Events(object):
@@ -145,8 +145,9 @@ def verifyAndConvertCompasDataToUcbUsingDict(compasData, conversionDict):
 #
 
 # +
-# Stellar type conversion dictionary
+## BSE_Switch_Log output processing
 
+# Stellar type conversion dictionary
 compasStellarTypeToUCBdict = {
     # COMPAS : UCB
     0: 121,
@@ -167,13 +168,6 @@ compasStellarTypeToUCBdict = {
     15: -1,
     16: 9,  # CHE star - doesn't exist in UCB notation
 }
-# -
-
-#
-
-
-# +
-## BSE_RLOF output processing
 
 def getUCBEventForStellarTypeChanges(ucb_events_obj):
     
@@ -205,62 +199,6 @@ def getUCBEventForStellarTypeChanges(ucb_events_obj):
                                stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
                                stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
                                scrapSeeds=scrapSeeds)
-    
-# +
-## Supernova output processing
-
-# Supernova conversion dictionary
-compasSupernovaToUCBdict = {
-    1:   2, # CCSN
-    2:   3, # ECSN
-    4:   4, # PISN
-    8:   5, # PPISN
-    16:  7, # USSN 
-    32:  8, # AIC 
-    64:  1, # Type Ia
-    128: 9, # HeSD
-}
-UCB_SN_TYPE_DIRECT_COLLAPSE = 6 # Need to separately treat failed SNe (i.e direct collapse)
-
-
-# -
-
-def getUCBEventForSupernova(ucb_events_obj):
-
-    Data = ucb_events_obj.Data
-    SN = Data["BSE_Supernovae"]
-    
-    # Direct output
-    uid = SN["SEED"][()]
-    time = SN["Time"][()]
-    semiMajorAxis = SN["SemiMajorAxis"][()]
-    eccentricity = SN["Eccentricity"][()]
-    mass1 = SN["Mass(1)"][()]
-    mass2 = SN["Mass(2)"][()]
-    radius1 = SN["Radius(1)"][()]
-    radius2 = SN["Radius(2)"][()]
-    teff1 = SN["Teff(1)"][()]
-    teff2 = SN["Teff(2)"][()]
-    massHeCore1 = SN["Mass_He_Core(1)"][()]
-    massHeCore2 = SN["Mass_He_Core(2)"][()]
-    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(SN["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
-    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(SN["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
-    
-    # Indirect output
-    whichStar = SN["Supernova_State"][()] 
-    assert np.all(np.in1d(whichStar, np.array([1, 2, 3]))) # TODO: need to address State 3 systems somehow.
-    scrapSeeds = whichStar == 3 # need to remove these seeds at the end
-
-    snType = verifyAndConvertCompasDataToUcbUsingDict(SN["SN_Type(SN)"][()], compasSupernovaToUCBdict)
-    fb = SN['Fallback_Fraction(SN)'][()]
-    snType[fb == 1] == UCB_SN_TYPE_DIRECT_COLLAPSE
-    event = 2*100 + whichStar*10 + snType    
-    
-    ucb_events_obj.addEvents(  uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
-                               stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
-                               stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
-                               scrapSeeds=scrapSeeds)
-
 
 # +
 ## BSE_RLOF output processing
@@ -362,28 +300,155 @@ def getUCBEventForMassTransfer(ucb_events_obj):
                                    stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
                                    scrapSeeds=scrapSeeds[mask])
 
+# +
+## Supernova output processing
+
+# Supernova conversion dictionary
+compasSupernovaToUCBdict = {
+    # COMPAS : UCB
+    1:   2, # CCSN
+    2:   3, # ECSN
+    4:   4, # PISN
+    8:   5, # PPISN
+    16:  7, # USSN 
+    32:  8, # AIC 
+    64:  1, # Type Ia
+    128: 9, # HeSD
+}
+UCB_SN_TYPE_DIRECT_COLLAPSE = 6 # Need to separately treat failed SNe (i.e direct collapse)
+
+def getUCBEventForSupernova(ucb_events_obj):
+
+    Data = ucb_events_obj.Data
+    SN = Data["BSE_Supernovae"]
+    
+    # Direct output
+    uid = SN["SEED"][()]
+    time = SN["Time"][()]
+    semiMajorAxis = SN["SemiMajorAxis"][()]
+    eccentricity = SN["Eccentricity"][()]
+    mass1 = SN["Mass(1)"][()]
+    mass2 = SN["Mass(2)"][()]
+    radius1 = SN["Radius(1)"][()]
+    radius2 = SN["Radius(2)"][()]
+    teff1 = SN["Teff(1)"][()]
+    teff2 = SN["Teff(2)"][()]
+    massHeCore1 = SN["Mass_He_Core(1)"][()]
+    massHeCore2 = SN["Mass_He_Core(2)"][()]
+    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(SN["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
+    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(SN["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
+    
+    # Indirect output
+    whichStar = SN["Supernova_State"][()] 
+    assert np.all(np.in1d(whichStar, np.array([1, 2, 3]))) # TODO: need to address State 3 systems somehow.
+    scrapSeeds = whichStar == 3 # need to remove these seeds at the end
+
+    snType = verifyAndConvertCompasDataToUcbUsingDict(SN["SN_Type(SN)"][()], compasSupernovaToUCBdict)
+    fb = SN['Fallback_Fraction(SN)'][()]
+    snType[fb == 1] == UCB_SN_TYPE_DIRECT_COLLAPSE
+    event = 2*100 + whichStar*10 + snType    
+    
+    ucb_events_obj.addEvents(  uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
+                               stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
+                               stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
+                               scrapSeeds=scrapSeeds)
+
 
 # +
-## BSE_RLOF output processing
+## End condition processing
+
+# End condition conversion dictionary
+compasOutcomeToUCBdict = {
+    # COMPAS : UCB
+    1:  -1, # simulation completed?
+    2:  9, # error
+    3:  1, # max time reached
+    4:  1, # max timesteps reached, kind of the same as above
+    5:  9, # error
+    6:  9, # error
+    7:  -1, # time exceeded dco merger time?
+    8:  -1, # stars touching ?
+    9:  4, # merger
+    10: 4, # merger
+    11: 2, # dco formed
+    12: 2, # dwd formed
+    13: 4, # massless remnant
+    14: 3, # unbound    
+}
+
+
+# -1 means I don't understand the compas output description, just toss these seeds for now
+# Q: how does 85 happen and not 84? Wouldn't simulations stop at 84?
+    
+# UCBs
+# 81 - max time reached
+# 82 - both components are compact remnants - RTW: including WDs?
+# 83 - the binary system is dissociated
+# 84 - only one object is left (e.g. due to a merger or because the companion has been disrupted)
+# 85 - nothing left (both components are massless remnants)
+# 89 - other: a terminating condition different from any previous one
+
+# COMPAS
+# Simulation completed = 1     - RTW: what does this mean?
+# Evolution stopped because an error occurred = 2
+# Allowed time exceeded = 3
+# Allowed timesteps exceeded = 4
+# SSE error for one of the constituent stars = 5
+# Error evolving binary = 6
+# Time exceeded DCO merger time = 7
+# Stars touching = 8
+# Stars merged = 9
+# Stars merged at birth = 10
+# DCO formed = 11
+# Double White Dwarf formed = 12
+# Massless Remnant formed = 13
+# Unbound binary = 14
+
+
+
 
 def getUCBEventForEndCondition(ucb_events_obj):
     
     Data = ucb_events_obj.Data
     SP = Data["BSE_System_Parameters"]
     
-    # TODO
+    # Direct output
+    uid = SP["SEED"][()]
+    time = SP["Time"][()]
+    semiMajorAxis = SP["SemiMajorAxis"][()]
+    eccentricity = SP["Eccentricity"][()]
+    mass1 = SP["Mass(1)"][()]
+    mass2 = SP["Mass(2)"][()]
+    radius1 = SP["Radius(1)"][()]
+    radius2 = SP["Radius(2)"][()]
+    teff1 = SP["Teff(1)"][()]
+    teff2 = SP["Teff(2)"][()]
+    massHeCore1 = SP["Mass_He_Core(1)"][()]
+    massHeCore2 = SP["Mass_He_Core(2)"][()]
+    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(SP["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
+    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(SP["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
     
-    for mask, event in zip(allmasks, allevents):
-
-        ucb_events_obj.addEvents(  uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
-                                   stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
-                                   stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
-                                   scrapSeeds=scrapSeeds[mask])
+    # Indirect output
+    evolStatus = verifyAndConvertCompasDataToUcbUsingDict(SP["Evolution_Status"][()], compasOutcomeToUCBdict)
+    assert np.all(np.in1d(evolStatus, np.array([1, 2, 3, 4, 5, 9, -1]))) 
+    scrapSeeds = evolStatus == -1 # -1 means I don't understand the compas outcome
+    if np.any(scrapSeeds):
+        print("There were {} strange evolutionary outcomes".format(np.sum(scrapSeeds)))
+    event = 8*10 + evolStatus
+    
+    ucb_events_obj.addEvents(  uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
+                               stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
+                               stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
+                               scrapSeeds=scrapSeeds)
 
 
 # -
 
 
+df = main()
+events = df.loc[:,"event"]
+np.unique(events)
+# +
 if __name__ == "__main__":
     # for testing
     Data = h5.File('./COMPAS_Output/COMPAS_Output.h5', 'r')
@@ -392,14 +457,18 @@ if __name__ == "__main__":
     SN = Data['BSE_Supernovae']
     SP = Data['BSE_System_Parameters']
     SL = Data['BSE_Switch_Log']
-    printCompasDetails(SL)
 
-# +
-#df = main()
-#events = df.loc[:,"event"]
-#np.unique(events)
+
+evolStatus = SP["Evolution_Status"][()]
+badMask = np.in1d(evolStatus, [ 1, 7, 8])
+spSeed = SP["SEED"][()]
+print(np.unique(evolStatus[badMask]))
+printCompasDetails(SP, spSeed[badMask])
+
+
 # -
 
+printCompasDetails(SN, [1702303379,1702303386,1702303408,1702303411,1702303415,1702303438,1702303457])
 
 
 
