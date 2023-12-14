@@ -40,9 +40,9 @@ def main():
     
 def load_COMPAS_data(filepath):
     ucb_events_obj = UCB_Events(filepath)
+    getUCBEventForStellarTypeChanges(ucb_events_obj)
     getUCBEventForSupernova(ucb_events_obj)
     getUCBEventForMassTransfer(ucb_events_obj)
-    #getUCBEventForStellarTypeChanges(ucb_events_obj) # TODO
     #getUCBEventForEndCondition(ucb_events_obj) # TODO
     return ucb_events_obj.getEvents()
 
@@ -123,7 +123,6 @@ class UCB_Events(object):
 
 # -
 
-main()
 
 
 def verifyAndConvertCompasDataToUcbUsingDict(compasData, conversionDict):
@@ -174,6 +173,40 @@ compasStellarTypeToUCBdict = {
 
 
 # +
+## BSE_RLOF output processing
+
+def getUCBEventForStellarTypeChanges(ucb_events_obj):
+    
+    Data = ucb_events_obj.Data
+    SL = Data["BSE_Switch_Log"]
+    
+    # Direct output
+    uid = SL["SEED"][()]
+    time = SL["Time"][()]
+    semiMajorAxis = SL["SemiMajorAxis"][()]
+    eccentricity = SL["Eccentricity"][()]
+    mass1 = SL["Mass(1)"][()]
+    mass2 = SL["Mass(2)"][()]
+    radius1 = SL["Radius(1)"][()]
+    radius2 = SL["Radius(2)"][()]
+    teff1 = SL["Teff(1)"][()]
+    teff2 = SL["Teff(2)"][()]
+    massHeCore1 = SL["Mass_He_Core(1)"][()]
+    massHeCore2 = SL["Mass_He_Core(2)"][()]
+    stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(SL["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
+    stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(SL["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
+    
+    # Indirect output
+    whichStar = SL['Star_Switching'][()]
+    event = 10 + whichStar
+    scrapSeeds = np.zeros_like(uid).astype(bool) # TODO Scrap seeds if start of RLOF for both in the same timestep - is there any way to work with these??
+
+    ucb_events_obj.addEvents(  uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
+                               stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
+                               stellarType2=stellarType2, mass2=mass2, radius2=radius2, teff2=teff2, massHeCore2=massHeCore2,
+                               scrapSeeds=scrapSeeds)
+    
+# +
 ## Supernova output processing
 
 # Supernova conversion dictionary
@@ -213,17 +246,15 @@ def getUCBEventForSupernova(ucb_events_obj):
     stellarType1 = verifyAndConvertCompasDataToUcbUsingDict(SN["Stellar_Type(1)"][()], compasStellarTypeToUCBdict)
     stellarType2 = verifyAndConvertCompasDataToUcbUsingDict(SN["Stellar_Type(2)"][()], compasStellarTypeToUCBdict)
     
-    # Processed output
+    # Indirect output
     whichStar = SN["Supernova_State"][()] 
     assert np.all(np.in1d(whichStar, np.array([1, 2, 3]))) # TODO: need to address State 3 systems somehow.
+    scrapSeeds = whichStar == 3 # need to remove these seeds at the end
 
     snType = verifyAndConvertCompasDataToUcbUsingDict(SN["SN_Type(SN)"][()], compasSupernovaToUCBdict)
     fb = SN['Fallback_Fraction(SN)'][()]
     snType[fb == 1] == UCB_SN_TYPE_DIRECT_COLLAPSE
-    
-    event = 2*100 + whichStar*10 + snType
-    
-    scrapSeeds = whichStar == 3 # need to remove these seeds at the end
+    event = 2*100 + whichStar*10 + snType    
     
     ucb_events_obj.addEvents(  uid=uid, time=time, event=event, semiMajor=semiMajorAxis, eccentricity=eccentricity, 
                                stellarType1=stellarType1, mass1=mass1, radius1=radius1, teff1=teff1, massHeCore1=massHeCore1, 
@@ -335,22 +366,6 @@ def getUCBEventForMassTransfer(ucb_events_obj):
 # +
 ## BSE_RLOF output processing
 
-def getUCBEventForStellarTypeChanges(ucb_events_obj):
-    
-    Data = ucb_events_obj.Data
-    SL = Data["BSE_Switch_Log"]
-    
-    # TODO
-    
-    for mask, event in zip(allmasks, allevents):
-
-        ucb_events_obj.addEvents(  uid=uid[mask], time=time[mask], event=event*np.ones_like(uid)[mask], semiMajor=semiMajorAxis[mask], eccentricity=eccentricity[mask], 
-                                   stellarType1=stellarType1[mask], mass1=mass1[mask], radius1=radius1[mask], teff1=teff1[mask], massHeCore1=massHeCore1[mask], 
-                                   stellarType2=stellarType2[mask], mass2=mass2[mask], radius2=radius2[mask], teff2=teff2[mask], massHeCore2=massHeCore2[mask],
-                                   scrapSeeds=scrapSeeds[mask])
-# +
-## BSE_RLOF output processing
-
 def getUCBEventForEndCondition(ucb_events_obj):
     
     Data = ucb_events_obj.Data
@@ -377,8 +392,13 @@ if __name__ == "__main__":
     SN = Data['BSE_Supernovae']
     SP = Data['BSE_System_Parameters']
     SL = Data['BSE_Switch_Log']
+    printCompasDetails(SL)
 
-
+# +
+#df = main()
+#events = df.loc[:,"event"]
+#np.unique(events)
+# -
 
 
 
